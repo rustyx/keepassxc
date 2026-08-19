@@ -112,6 +112,7 @@ void BrowserSettingsWidget::loadSettings()
     m_ui->alwaysAllowUpdate->setChecked(settings->alwaysAllowUpdate());
     m_ui->httpAuthPermission->setChecked(settings->httpAuthPermission());
     m_ui->searchInAllDatabases->setChecked(settings->searchInAllDatabases());
+    m_ui->showEntrySearchDialog->setChecked(settings->showEntrySearchDialog());
     m_ui->supportKphFields->setChecked(settings->supportKphFields());
     m_ui->allowLocalhostWithPasskeys->setChecked(settings->allowLocalhostWithPasskeys());
     m_ui->noMigrationPrompt->setChecked(settings->noMigrationPrompt());
@@ -238,6 +239,7 @@ void BrowserSettingsWidget::saveSettings()
     settings->setAlwaysAllowUpdate(m_ui->alwaysAllowUpdate->isChecked());
     settings->setHttpAuthPermission(m_ui->httpAuthPermission->isChecked());
     settings->setSearchInAllDatabases(m_ui->searchInAllDatabases->isChecked());
+    settings->setShowEntrySearchDialog(m_ui->showEntrySearchDialog->isChecked());
     settings->setSupportKphFields(m_ui->supportKphFields->isChecked());
     settings->setAllowLocalhostWithPasskeys(m_ui->allowLocalhostWithPasskeys->isChecked());
     settings->setNoMigrationPrompt(m_ui->noMigrationPrompt->isChecked());

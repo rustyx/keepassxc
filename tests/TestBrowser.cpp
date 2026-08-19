@@ -19,6 +19,7 @@
 
 #include "browser/BrowserMessageBuilder.h"
 #include "browser/BrowserSettings.h"
+#include "core/Clock.h"
 #include "core/Group.h"
 #include "core/Tools.h"
 #include "crypto/Crypto.h"
@@ -629,6 +630,183 @@ void TestBrowser::testSubdomainsAndPaths()
     // With local files, url is always set to the file scheme + ://. Submit URL holds the actual URL.
     result = m_browserService->searchEntries(db, "file://", "file:///Users/testUser/tests/test.html");
     QCOMPARE(result.length(), 1);
+}
+
+void TestBrowser::testSearchEntriesByText()
+{
+    auto db = QSharedPointer<Database>::create();
+    auto* root = db->rootGroup();
+
+    QStringList urls = {"https://example.com/one", "https://example.com/two", "https://example.com/three"};
+    auto entries = createEntries(urls, root);
+    entries[0]->setTitle("Matches by URL only");
+    entries[1]->setTitle("Example.com account");
+    entries[2]->setTitle("Another example.com entry");
+
+    // Entries matching in the title are listed before the ones matching in another field
+    auto result = m_browserService->searchEntriesByText("example.com", {db}, {});
+    QCOMPARE(result.size(), 3);
+    QCOMPARE(result[0]->title(), QString("Example.com account"));
+    QCOMPARE(result[1]->title(), QString("Another example.com entry"));
+    QCOMPARE(result[2]->title(), QString("Matches by URL only"));
+
+    // Every word must be found from the title to prioritize the entry
+    result = m_browserService->searchEntriesByText("example.com account", {db}, {});
+    QCOMPARE(result.size(), 1);
+    QCOMPARE(result[0]->title(), QString("Example.com account"));
+
+    // An empty search text returns all visible entries
+    QCOMPARE(m_browserService->searchEntriesByText("", {db}, {}).size(), 3);
+}
+
+void TestBrowser::testSearchEntriesByTextHttpAuth()
+{
+    auto db = QSharedPointer<Database>::create();
+    auto* root = db->rootGroup();
+
+    QStringList urls = {"https://example.com/one"};
+    auto entries = createEntries(urls, root);
+    auto* entry = entries[0];
+    entry->setTitle("Example");
+
+    // Without any HTTP Basic Auth options the entry is found for both request types
+    QCOMPARE(m_browserService->searchEntriesByText("example", {db}, {}, false).size(), 1);
+    QCOMPARE(m_browserService->searchEntriesByText("example", {db}, {}, true).size(), 1);
+
+    // An entry restricted to HTTP Basic Auth must not be offered for filling a form
+    entry->customData()->set(BrowserService::OPTION_ONLY_HTTP_AUTH, TRUE_STR);
+    QCOMPARE(m_browserService->searchEntriesByText("example", {db}, {}, false).size(), 0);
+    QCOMPARE(m_browserService->searchEntriesByText("example", {db}, {}, true).size(), 1);
+    entry->customData()->remove(BrowserService::OPTION_ONLY_HTTP_AUTH);
+
+    // The same restriction from the group settings
+    root->setCustomDataTriState(BrowserService::OPTION_ONLY_HTTP_AUTH, Group::Enable);
+    QCOMPARE(m_browserService->searchEntriesByText("example", {db}, {}, false).size(), 0);
+    QCOMPARE(m_browserService->searchEntriesByText("example", {db}, {}, true).size(), 1);
+    root->setCustomDataTriState(BrowserService::OPTION_ONLY_HTTP_AUTH, Group::Inherit);
+
+    // An entry excluded from HTTP Basic Auth must not be offered for it
+    entry->customData()->set(BrowserService::OPTION_NOT_HTTP_AUTH, TRUE_STR);
+    QCOMPARE(m_browserService->searchEntriesByText("example", {db}, {}, false).size(), 1);
+    QCOMPARE(m_browserService->searchEntriesByText("example", {db}, {}, true).size(), 0);
+    entry->customData()->remove(BrowserService::OPTION_NOT_HTTP_AUTH);
+
+    // The same exclusion from the group settings
+    root->setCustomDataTriState(BrowserService::OPTION_NOT_HTTP_AUTH, Group::Enable);
+    QCOMPARE(m_browserService->searchEntriesByText("example", {db}, {}, false).size(), 1);
+    QCOMPARE(m_browserService->searchEntriesByText("example", {db}, {}, true).size(), 0);
+}
+
+void TestBrowser::testEntryWarning()
+{
+    auto db = QSharedPointer<Database>::create();
+    auto* root = db->rootGroup();
+
+    QStringList urls = {"https://example.com/one"};
+    auto entries = createEntries(urls, root);
+    auto* entry = entries[0];
+
+    // A freshly created entry has nothing to warn about
+    QVERIFY(m_browserService->getEntryWarning(entry, "https://example.com", "https://example.com", {}).isEmpty());
+
+    // Access to the entry has been denied for this site before
+    m_browserService->denyEntry(entry, "example.com", "example.com", {});
+    QCOMPARE(m_browserService->getEntryWarning(entry, "https://example.com", "https://example.com", {}),
+             QString("Access previously denied"));
+
+    // The denial only concerns the site it was given for
+    QVERIFY(m_browserService->getEntryWarning(entry, "https://another.com", "https://another.com", {}).isEmpty());
+
+    // Allowing the entry again clears the warning
+    m_browserService->allowEntry(entry, "example.com", "example.com", {});
+    QVERIFY(m_browserService->getEntryWarning(entry, "https://example.com", "https://example.com", {}).isEmpty());
+
+    // The entry is bound to a different HTTP Basic Auth realm
+    m_browserService->allowEntry(entry, "another.com", "another.com", "Restricted Area");
+    QCOMPARE(m_browserService->getEntryWarning(entry, "https://third.com", "https://third.com", "Another Area"),
+             QString("Different HTTP Basic Auth realm"));
+
+    // The entry has the host of the site but a different scheme
+    const auto matchUrlScheme = browserSettings()->matchUrlScheme();
+    browserSettings()->setMatchUrlScheme(true);
+    QCOMPARE(m_browserService->getEntryWarning(entry, "http://example.com", "http://example.com", {}),
+             QString("Different URL scheme"));
+
+    // The scheme does not matter when the setting is disabled
+    browserSettings()->setMatchUrlScheme(false);
+    QVERIFY(m_browserService->getEntryWarning(entry, "http://example.com", "http://example.com", {}).isEmpty());
+    browserSettings()->setMatchUrlScheme(matchUrlScheme);
+
+    // Expired entries are warned about unless they are allowed to be used
+    const auto allowExpiredCredentials = browserSettings()->allowExpiredCredentials();
+    entry->setExpiryTime(Clock::currentDateTimeUtc().addDays(-1));
+    entry->setExpires(true);
+
+    browserSettings()->setAllowExpiredCredentials(false);
+    QCOMPARE(m_browserService->getEntryWarning(entry, "https://example.com", "https://example.com", {}),
+             QString("Expired"));
+
+    browserSettings()->setAllowExpiredCredentials(true);
+    QVERIFY(m_browserService->getEntryWarning(entry, "https://example.com", "https://example.com", {}).isEmpty());
+
+    browserSettings()->setAllowExpiredCredentials(allowExpiredCredentials);
+}
+
+void TestBrowser::testAllowEntry()
+{
+    auto db = QSharedPointer<Database>::create();
+    auto* root = db->rootGroup();
+
+    QStringList urls = {"https://example.com/one"};
+    auto entries = createEntries(urls, root);
+    auto* entry = entries[0];
+
+    // Access to the entry has been denied for this site before
+    m_browserService->denyEntry(entry, "example.com", "example.com", {});
+    QCOMPARE(m_browserService->getEntryWarning(entry, "https://example.com", "https://example.com", {}),
+             QString("Access previously denied"));
+    QVERIFY(m_browserService->checkAccess(entry, "example.com", "example.com", {}) == BrowserService::Denied);
+
+    // Allowing the entry clears the denial and lets it be used without a confirmation
+    m_browserService->allowEntry(entry, "example.com", "example.com", {});
+    QVERIFY(m_browserService->getEntryWarning(entry, "https://example.com", "https://example.com", {}).isEmpty());
+    QVERIFY(m_browserService->checkAccess(entry, "example.com", "example.com", {}) == BrowserService::Allowed);
+
+    // Other sites are not affected
+    m_browserService->denyEntry(entry, "another.com", "another.com", {});
+    m_browserService->allowEntry(entry, "example.com", "example.com", {});
+    QCOMPARE(m_browserService->getEntryWarning(entry, "https://another.com", "https://another.com", {}),
+             QString("Access previously denied"));
+}
+
+void TestBrowser::testSaveUrlToEntry()
+{
+    auto db = QSharedPointer<Database>::create();
+    auto* root = db->rootGroup();
+
+    QStringList urls = {"", "https://example.com/login"};
+    auto entries = createEntries(urls, root);
+
+    // An entry without an URL gets the site URL
+    m_browserService->saveUrlToEntry(entries[0], "https://example.com/login");
+    QCOMPARE(entries[0]->url(), QString("https://example.com/login"));
+    QVERIFY(entries[0]->getAdditionalUrls().isEmpty());
+
+    // An entry with an URL gets an additional URL instead
+    m_browserService->saveUrlToEntry(entries[1], "https://another.example.com/login");
+    QCOMPARE(entries[1]->url(), QString("https://example.com/login"));
+    QCOMPARE(entries[1]->attributes()->value(EntryAttributes::AdditionalUrlAttribute),
+             QString("https://another.example.com/login"));
+
+    // Further URLs are numbered
+    m_browserService->saveUrlToEntry(entries[1], "https://yetanother.example.com/login");
+    QCOMPARE(entries[1]->attributes()->value(QString("%1_1").arg(EntryAttributes::AdditionalUrlAttribute)),
+             QString("https://yetanother.example.com/login"));
+
+    // Already known URLs are not stored again
+    m_browserService->saveUrlToEntry(entries[1], "https://example.com/login/");
+    m_browserService->saveUrlToEntry(entries[1], "https://another.example.com/login");
+    QCOMPARE(entries[1]->getAdditionalUrls().length(), 2);
 }
 
 QList<Entry*> TestBrowser::createEntries(QStringList& urls, Group* root, bool additionalUrl) const
