@@ -24,8 +24,20 @@
 #include "core/Group.h"
 #include "gui/Icons.h"
 #include "gui/UrlTools.h"
+#include "gui/styles/StateColorPalette.h"
 
 static constexpr int SEARCH_INTERVAL = 150;
+static constexpr int URL_COLUMN_MIN_WIDTH = 150;
+static constexpr int URL_COLUMN_MAX_WIDTH = 920;
+
+// Columns of the entry table
+enum EntryColumn
+{
+    TitleColumn = 0,
+    UsernameColumn,
+    UrlColumn,
+    WarningColumn
+};
 
 BrowserEntrySearchDialog::BrowserEntrySearchDialog(QWidget* parent)
     : QDialog(parent)
@@ -56,11 +68,16 @@ BrowserEntrySearchDialog::BrowserEntrySearchDialog(QWidget* parent)
     connect(m_ui->itemsTable, SIGNAL(acceptSelections()), SLOT(accept()));
     connect(m_ui->itemsTable, SIGNAL(focusInWithoutSelections()), this, SLOT(selectionChanged()));
 
-    m_ui->itemsTable->setColumnCount(3);
-    m_ui->itemsTable->setHorizontalHeaderLabels({tr("Title"), tr("Username"), tr("URL")});
-    m_ui->itemsTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    m_ui->itemsTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
-    m_ui->itemsTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
+    m_ui->itemsTable->setColumnCount(4);
+    m_ui->itemsTable->setHorizontalHeaderLabels({tr("Title"), tr("Username"), tr("URL"), tr("Warning")});
+    // Interactive sections keep the columns resizable by the user. The widths are calculated in updateColumnWidths()
+    // until the user adjusts a column manually.
+    m_ui->itemsTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
+    m_ui->itemsTable->horizontalHeader()->setStretchLastSection(false);
+    m_ui->itemsTable->viewport()->installEventFilter(this);
+    connect(m_ui->itemsTable->horizontalHeader(), &QHeaderView::sectionResized, this, [this] {
+        m_columnsResizedByUser = !m_updatingColumns;
+    });
 }
 
 BrowserEntrySearchDialog::~BrowserEntrySearchDialog()
@@ -81,7 +98,7 @@ void BrowserEntrySearchDialog::setSiteUrl(const QString& siteUrl)
     performSearch();
 }
 
-void BrowserEntrySearchDialog::setEntries(const QList<Entry*>& entries)
+void BrowserEntrySearchDialog::setEntries(const QList<SearchDialogEntry>& entries)
 {
     m_entries = entries;
 
@@ -89,10 +106,12 @@ void BrowserEntrySearchDialog::setEntries(const QList<Entry*>& entries)
     m_ui->itemsTable->setRowCount(entries.count());
 
     int row = 0;
-    for (const auto& entry : entries) {
-        addEntryToList(entry, row);
+    for (const auto& searchEntry : entries) {
+        addEntryToList(searchEntry, row);
         ++row;
     }
+
+    updateColumnWidths();
 
     if (!entries.isEmpty()) {
         m_ui->itemsTable->selectRow(0);
@@ -101,11 +120,62 @@ void BrowserEntrySearchDialog::setEntries(const QList<Entry*>& entries)
     selectionChanged();
 }
 
+// The columns are laid out for the width of the table, which is not known before the dialog is shown and changes
+// when the dialog is resized. QDialog::resizeEvent() comes too early for that, so the viewport is watched instead.
+bool BrowserEntrySearchDialog::eventFilter(QObject* watched, QEvent* event)
+{
+    if (watched == m_ui->itemsTable->viewport() && event->type() == QEvent::Resize) {
+        updateColumnWidths();
+    }
+
+    return QDialog::eventFilter(watched, event);
+}
+
+void BrowserEntrySearchDialog::updateColumnWidths()
+{
+    // Setting the widths can show or hide the scroll bars, which resizes the viewport again
+    if (m_updatingColumns || m_columnsResizedByUser) {
+        return;
+    }
+
+    const auto available = m_ui->itemsTable->viewport()->width();
+    if (available <= 0) {
+        return;
+    }
+
+    m_updatingColumns = true;
+
+    auto contentWidth = [this](int column) {
+        m_ui->itemsTable->resizeColumnToContents(column);
+        return m_ui->itemsTable->columnWidth(column);
+    };
+
+    const auto titleWidth = contentWidth(TitleColumn);
+    const auto usernameWidth = contentWidth(UsernameColumn);
+    const auto warningWidth = contentWidth(WarningColumn);
+    const auto totalWidth = titleWidth + usernameWidth + warningWidth;
+
+    if (totalWidth > 0) {
+        const auto urlWidth = qBound(URL_COLUMN_MIN_WIDTH, available - totalWidth, URL_COLUMN_MAX_WIDTH);
+        const auto remaining = available - urlWidth;
+
+        m_ui->itemsTable->setColumnWidth(TitleColumn, titleWidth * remaining / totalWidth);
+        m_ui->itemsTable->setColumnWidth(UsernameColumn, usernameWidth * remaining / totalWidth);
+        m_ui->itemsTable->setColumnWidth(UrlColumn, urlWidth);
+        // The last column takes the rounding remainder so that the columns fill the table exactly
+        m_ui->itemsTable->setColumnWidth(WarningColumn,
+                                         remaining - m_ui->itemsTable->columnWidth(TitleColumn)
+                                             - m_ui->itemsTable->columnWidth(UsernameColumn));
+    }
+
+    m_updatingColumns = false;
+}
+
 QList<Entry*> BrowserEntrySearchDialog::selectedEntries() const
 {
     QList<Entry*> selected;
     for (const auto& index : m_ui->itemsTable->selectionModel()->selectedRows()) {
-        selected.append(m_entries.at(index.row()));
+        selected.append(m_entries.at(index.row()).entry);
     }
     return selected;
 }
@@ -134,8 +204,9 @@ void BrowserEntrySearchDialog::selectionChanged()
     }
 }
 
-void BrowserEntrySearchDialog::addEntryToList(const Entry* entry, int row)
+void BrowserEntrySearchDialog::addEntryToList(const SearchDialogEntry& searchEntry, int row)
 {
+    const auto* entry = searchEntry.entry;
     const auto entryUrl = entry->resolveMultiplePlaceholders(entry->url());
 
     const auto titleItem = new QTableWidgetItem();
@@ -143,14 +214,24 @@ void BrowserEntrySearchDialog::addEntryToList(const Entry* entry, int row)
     if (entry->group()) {
         titleItem->setToolTip(entry->group()->hierarchy().join("/"));
     }
-    m_ui->itemsTable->setItem(row, 0, titleItem);
+    m_ui->itemsTable->setItem(row, TitleColumn, titleItem);
 
     const auto usernameItem = new QTableWidgetItem();
     usernameItem->setText(entry->resolveMultiplePlaceholders(entry->username()));
-    m_ui->itemsTable->setItem(row, 1, usernameItem);
+    m_ui->itemsTable->setItem(row, UsernameColumn, usernameItem);
 
     const auto urlItem = new QTableWidgetItem();
     urlItem->setText(entryUrl);
     urlItem->setToolTip(entryUrl);
-    m_ui->itemsTable->setItem(row, 2, urlItem);
+    m_ui->itemsTable->setItem(row, UrlColumn, urlItem);
+
+    // Show why the entry was not offered automatically, e.g. access to it has been denied for this site
+    const auto warningItem = new QTableWidgetItem();
+    if (!searchEntry.warning.isEmpty()) {
+        warningItem->setText(searchEntry.warning);
+        warningItem->setToolTip(searchEntry.warning);
+        warningItem->setIcon(
+            icons()->icon("dialog-warning", true, StateColorPalette().color(StateColorPalette::Warning)));
+    }
+    m_ui->itemsTable->setItem(row, WarningColumn, warningItem);
 }

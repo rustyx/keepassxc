@@ -542,8 +542,16 @@ QJsonArray BrowserService::showEntrySearchDialog(const EntryParameters& entryPar
 
     connect(m_currentDatabaseWidget, SIGNAL(databaseLockRequested()), &searchDialog, SLOT(reject()));
 
+    const auto siteHost = QUrl(entryParameters.siteUrl).host();
+    const auto formHost = QUrl(entryParameters.formUrl).host();
+
     connect(&searchDialog, &BrowserEntrySearchDialog::searchRequested, &searchDialog, [&](const QString& searchText) {
-        searchDialog.setEntries(searchEntriesByText(searchText, databases, keys, entryParameters.httpAuth));
+        QList<SearchDialogEntry> searchEntries;
+        for (auto* entry : searchEntriesByText(searchText, databases, keys, entryParameters.httpAuth)) {
+            searchEntries.append({entry, getAccessWarning(entry, siteHost, formHost, entryParameters.realm)});
+        }
+
+        searchDialog.setEntries(searchEntries);
     });
 
     searchDialog.setSiteUrl(entryParameters.siteUrl);
@@ -1365,6 +1373,37 @@ BrowserService::checkAccess(const Entry* entry, const QString& siteHost, const Q
         return Denied;
     }
     return Unknown;
+}
+
+// Describes why checkAccess() would not allow the entry to be used with the site. Returns an empty
+// string when there is nothing to warn about. The checks must be kept in sync with checkAccess().
+QString BrowserService::getAccessWarning(const Entry* entry,
+                                         const QString& siteHost,
+                                         const QString& formHost,
+                                         const QString& realm)
+{
+    if (entry->isExpired() && !browserSettings()->allowExpiredCredentials()) {
+        return tr("Expired");
+    }
+
+    BrowserEntryConfig config;
+    if (!config.load(entry)) {
+        return {};
+    }
+
+    if (config.isAllowed(siteHost) && (formHost.isEmpty() || config.isAllowed(formHost))) {
+        return {};
+    }
+
+    if (config.isDenied(siteHost) || (!formHost.isEmpty() && config.isDenied(formHost))) {
+        return tr("Access previously denied");
+    }
+
+    if (!realm.isEmpty() && config.realm() != realm) {
+        return tr("Different HTTP Basic Auth realm");
+    }
+
+    return {};
 }
 
 Group* BrowserService::getDefaultEntryGroup(const QSharedPointer<Database>& selectedDb)

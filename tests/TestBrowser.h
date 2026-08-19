@@ -58,6 +58,7 @@ private slots:
     void testSaveUrlToEntry();
     void testSearchEntriesByText();
     void testSearchEntriesByTextHttpAuth();
+    void testAccessWarning();
 
 private:
     QList<Entry*> createEntries(QStringList& urls, Group* root, bool additionalUrl = false) const;

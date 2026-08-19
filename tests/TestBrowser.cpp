@@ -20,6 +20,7 @@
 #include "browser/BrowserHost.h"
 #include "browser/BrowserMessageBuilder.h"
 #include "browser/BrowserSettings.h"
+#include "core/Clock.h"
 #include "core/Group.h"
 #include "core/Tools.h"
 #include "crypto/Crypto.h"
@@ -820,6 +821,49 @@ void TestBrowser::testSearchEntriesByTextHttpAuth()
     root->setCustomDataTriState(BrowserService::OPTION_NOT_HTTP_AUTH, Group::Enable);
     QCOMPARE(m_browserService->searchEntriesByText("example", {db}, {}, false).size(), 1);
     QCOMPARE(m_browserService->searchEntriesByText("example", {db}, {}, true).size(), 0);
+}
+
+void TestBrowser::testAccessWarning()
+{
+    auto db = QSharedPointer<Database>::create();
+    auto* root = db->rootGroup();
+
+    QStringList urls = {"https://example.com/one"};
+    auto entries = createEntries(urls, root);
+    auto* entry = entries[0];
+
+    // A freshly created entry has nothing to warn about
+    QVERIFY(m_browserService->getAccessWarning(entry, "example.com", "example.com", {}).isEmpty());
+
+    // Access to the entry has been denied for this site before
+    m_browserService->denyEntry(entry, "example.com", "example.com", {});
+    QCOMPARE(m_browserService->getAccessWarning(entry, "example.com", "example.com", {}),
+             QString("Access previously denied"));
+
+    // The denial only concerns the site it was given for
+    QVERIFY(m_browserService->getAccessWarning(entry, "another.com", "another.com", {}).isEmpty());
+
+    // Allowing the entry again clears the warning
+    m_browserService->allowEntry(entry, "example.com", "example.com", {});
+    QVERIFY(m_browserService->getAccessWarning(entry, "example.com", "example.com", {}).isEmpty());
+
+    // The entry is bound to a different HTTP Basic Auth realm
+    m_browserService->allowEntry(entry, "another.com", "another.com", "Restricted Area");
+    QCOMPARE(m_browserService->getAccessWarning(entry, "third.com", "third.com", "Another Area"),
+             QString("Different HTTP Basic Auth realm"));
+
+    // Expired entries are warned about unless they are allowed to be used
+    const auto allowExpiredCredentials = browserSettings()->allowExpiredCredentials();
+    entry->setExpiryTime(Clock::currentDateTimeUtc().addDays(-1));
+    entry->setExpires(true);
+
+    browserSettings()->setAllowExpiredCredentials(false);
+    QCOMPARE(m_browserService->getAccessWarning(entry, "example.com", "example.com", {}), QString("Expired"));
+
+    browserSettings()->setAllowExpiredCredentials(true);
+    QVERIFY(m_browserService->getAccessWarning(entry, "example.com", "example.com", {}).isEmpty());
+
+    browserSettings()->setAllowExpiredCredentials(allowExpiredCredentials);
 }
 
 void TestBrowser::testSaveUrlToEntry()

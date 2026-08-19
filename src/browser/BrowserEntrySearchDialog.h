@@ -23,6 +23,12 @@
 
 class Entry;
 
+struct SearchDialogEntry
+{
+    Entry* entry;
+    QString warning;
+};
+
 namespace Ui
 {
     class BrowserEntrySearchDialog;
@@ -37,24 +43,30 @@ public:
     ~BrowserEntrySearchDialog() override;
 
     void setSiteUrl(const QString& siteUrl);
-    void setEntries(const QList<Entry*>& entries);
+    void setEntries(const QList<SearchDialogEntry>& entries);
     QList<Entry*> selectedEntries() const;
     bool saveUrl() const;
 
 signals:
     void searchRequested(const QString& searchText);
 
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
 private slots:
     void performSearch();
     void selectionChanged();
 
 private:
-    void addEntryToList(const Entry* entry, int row);
+    void addEntryToList(const SearchDialogEntry& searchEntry, int row);
+    void updateColumnWidths();
 
 private:
     QScopedPointer<Ui::BrowserEntrySearchDialog> m_ui;
-    QList<Entry*> m_entries;
+    QList<SearchDialogEntry> m_entries;
     QTimer m_searchTimer;
+    bool m_updatingColumns = false;
+    bool m_columnsResizedByUser = false;
 };
 
 #endif // KEEPASSXC_BROWSERENTRYSEARCHDIALOG_H

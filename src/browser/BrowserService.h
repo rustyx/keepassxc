@@ -199,6 +199,8 @@ private:
     void denyEntry(Entry* entry, const QString& siteHost, const QString& formUrl, const QString& realm);
     QJsonArray getChildrenFromGroup(Group* group);
     Access checkAccess(const Entry* entry, const QString& siteHost, const QString& formHost, const QString& realm);
+    QString
+    getAccessWarning(const Entry* entry, const QString& siteHost, const QString& formHost, const QString& realm);
     Group* getDefaultEntryGroup(const QSharedPointer<Database>& selectedDb = {});
     int sortPriority(const QStringList& urls, const QString& siteUrl, const QString& formUrl);
     bool removeFirstDomain(QString& hostname);
