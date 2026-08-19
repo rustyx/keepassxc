@@ -43,6 +43,12 @@ struct KeyPairMessage
     QString secretKey;
 };
 
+struct VisibleEntry
+{
+    Entry* entry;
+    bool omitWwwSubdomain;
+};
+
 struct EntryParameters
 {
     QString dbid;
@@ -123,6 +129,8 @@ public:
     bool deleteEntry(const QString& uuid);
     void removePluginData(Entry* entry) const;
     QJsonArray findEntries(const EntryParameters& entryParameters, const StringPairList& keyList, bool* entriesFound);
+    QJsonArray
+    showEntrySearchDialog(const EntryParameters& entryParameters, const StringPairList& keyList, bool* entriesFound);
     void requestGlobalAutoType(const QString& search);
 
     static QString decodeCustomDataRestrictKey(const QString& key);
@@ -166,6 +174,8 @@ private:
         HiddenInSystemTray
     };
 
+    QList<VisibleEntry> getVisibleEntries(const QSharedPointer<Database>& db, const QStringList& keys);
+    QList<QSharedPointer<Database>> getConnectedDatabases(const StringPairList& keyList, QStringList& keys);
     QList<Entry*> searchEntries(const QSharedPointer<Database>& db,
                                 const QString& siteUrl,
                                 const QString& formUrl,
@@ -173,6 +183,10 @@ private:
                                 bool passkey = false);
     QList<Entry*>
     searchEntries(const QString& siteUrl, const QString& formUrl, const StringPairList& keyList, bool passkey = false);
+    QList<Entry*> searchEntriesByText(const QString& searchText,
+                                      const QList<QSharedPointer<Database>>& databases,
+                                      const QStringList& keys,
+                                      const bool httpAuth = false);
     QList<Entry*> sortEntries(QList<Entry*>& entries, const QString& siteUrl, const QString& formUrl);
     QList<Entry*> confirmEntries(QList<Entry*>& entriesToConfirm,
                                  const EntryParameters& entryParameters,
@@ -180,6 +194,7 @@ private:
                                  const QString& formUrl,
                                  const bool httpAuth);
     QJsonObject prepareEntry(const Entry* entry);
+    void saveUrlToEntry(Entry* entry, const QString& siteUrl);
     void allowEntry(Entry* entry, const QString& siteHost, const QString& formUrl, const QString& realm);
     void denyEntry(Entry* entry, const QString& siteHost, const QString& formUrl, const QString& realm);
     QJsonArray getChildrenFromGroup(Group* group);
@@ -189,6 +204,7 @@ private:
     bool removeFirstDomain(QString& hostname);
     bool
     shouldIncludeEntry(Entry* entry, const QString& url, const QString& submitUrl, const bool omitWwwSubdomain = false);
+    bool shouldIncludeEntryForHttpAuth(const Entry* entry, const bool httpAuth);
 
     QList<Entry*> getPasskeyEntries(const QString& rpId, const StringPairList& keyList);
     QList<Entry*>

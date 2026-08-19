@@ -45,6 +45,8 @@ public:
     void setAlwaysAllowUpdate(bool alwaysAllowUpdate);
     bool searchInAllDatabases();
     void setSearchInAllDatabases(bool searchInAllDatabases);
+    bool showEntrySearchDialog();
+    void setShowEntrySearchDialog(bool showEntrySearchDialog);
     bool httpAuthPermission();
     void setHttpAuthPermission(bool httpAuthPermission);
     bool supportKphFields();

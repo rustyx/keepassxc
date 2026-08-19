@@ -247,6 +247,19 @@
         </widget>
        </item>
        <item>
+        <widget class="QCheckBox" name="showEntrySearchDialog">
+         <property name="toolTip">
+          <string>Opens a dialog for searching the correct entry manually when no credentials match the site URL.</string>
+         </property>
+         <property name="text">
+          <string extracomment="Credentials mean login data requested via browser extension">Ask to search for an entry when no credentials are found</string>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
         <spacer name="verticalSpacer_2">
          <property name="orientation">
           <enum>Qt::Vertical</enum>

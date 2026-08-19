@@ -125,6 +125,16 @@ void BrowserSettings::setSearchInAllDatabases(bool searchInAllDatabases)
     config()->set(Config::Browser_SearchInAllDatabases, searchInAllDatabases);
 }
 
+bool BrowserSettings::showEntrySearchDialog()
+{
+    return config()->get(Config::Browser_ShowEntrySearchDialog).toBool();
+}
+
+void BrowserSettings::setShowEntrySearchDialog(bool showEntrySearchDialog)
+{
+    config()->set(Config::Browser_ShowEntrySearchDialog, showEntrySearchDialog);
+}
+
 bool BrowserSettings::supportKphFields()
 {
     return config()->get(Config::Browser_SupportKphFields).toBool();

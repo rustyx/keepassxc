@@ -248,7 +248,12 @@ QJsonObject BrowserAction::handleGetLogins(const QJsonObject& json, const QStrin
     entryParameters.httpAuth = httpAuth;
 
     bool entriesFound = false;
-    const auto entries = browserService()->findEntries(entryParameters, keyList, &entriesFound);
+    auto entries = browserService()->findEntries(entryParameters, keyList, &entriesFound);
+
+    if (!entriesFound && browserSettings()->showEntrySearchDialog()) {
+        entries = browserService()->showEntrySearchDialog(entryParameters, keyList, &entriesFound);
+    }
+
     if (!entriesFound) {
         return getErrorReply(action, ERROR_KEEPASS_NO_LOGINS_FOUND);
     }

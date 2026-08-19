@@ -160,6 +160,7 @@ public:
         Browser_AlwaysAllowUpdate,
         Browser_HttpAuthPermission,
         Browser_SearchInAllDatabases,
+        Browser_ShowEntrySearchDialog,
         Browser_SupportKphFields,
         Browser_NoMigrationPrompt,
         Browser_UseCustomBrowser,
