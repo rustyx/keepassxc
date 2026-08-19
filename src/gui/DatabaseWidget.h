@@ -228,6 +228,7 @@ public slots:
     void deleteGroup();
     void switchToMainView(bool previousDialogAccepted = false);
     void switchToEntryEdit();
+    void switchToEntryEdit(Entry* entry);
     void switchToGroupEdit();
     void sortGroupsAsc();
     void sortGroupsDesc();
@@ -272,7 +273,6 @@ private slots:
     void entryActivationSignalReceived(Entry* entry, EntryModel::ModelColumn column);
     void switchBackToEntryEdit();
     void switchToHistoryView(Entry* entry);
-    void switchToEntryEdit(Entry*);
     void switchToEntryEdit(Entry* entry, bool create);
     void switchToGroupEdit(Group* entry, bool create);
     void emitGroupContextMenuRequested(const QPoint& pos);

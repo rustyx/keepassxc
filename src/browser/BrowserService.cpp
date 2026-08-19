@@ -32,6 +32,7 @@
 #include "core/EntryAttributes.h"
 #include "core/EntrySearcher.h"
 #include "core/Tools.h"
+#include "gui/DatabaseTabWidget.h"
 #include "gui/MainWindow.h"
 #include "gui/MessageBox.h"
 #include "gui/UrlTools.h"
@@ -556,6 +557,12 @@ QJsonArray BrowserService::showEntrySearchDialog(const EntryParameters& entryPar
 
     searchDialog.setSiteUrl(entryParameters.siteUrl);
 
+    Entry* entryToEdit = nullptr;
+    connect(&searchDialog, &BrowserEntrySearchDialog::entryEditRequested, &searchDialog, [&](Entry* entry) {
+        entryToEdit = entry;
+        searchDialog.reject();
+    });
+
     QJsonArray entries;
     auto ret = searchDialog.exec();
 
@@ -569,14 +576,46 @@ QJsonArray BrowserService::showEntrySearchDialog(const EntryParameters& entryPar
         }
     }
 
-    hideWindow();
     m_dialogActive = false;
+
+    if (entryToEdit && isDatabaseOpened()) {
+        // Editing takes the user to the main window, so it must stay visible
+        editEntry(entryToEdit);
+    } else {
+        hideWindow();
+    }
 
     if (entriesFound) {
         *entriesFound = !entries.isEmpty();
     }
 
     return entries;
+}
+
+// Shows the entry in the main window for editing. The entry may belong to another database than the active one.
+void BrowserService::editEntry(Entry* entry)
+{
+    DatabaseWidget* dbWidget = m_currentDatabaseWidget;
+    for (auto* openDatabaseWidget : getMainWindow()->getOpenDatabases()) {
+        if (openDatabaseWidget->database().data() == entry->database()) {
+            dbWidget = openDatabaseWidget;
+            break;
+        }
+    }
+
+    if (!dbWidget) {
+        return;
+    }
+
+    raiseWindow(true);
+
+    // Bring the tab of the database to the front before switching to the entry
+    auto* tabWidget = getMainWindow()->findChild<DatabaseTabWidget*>();
+    if (tabWidget) {
+        tabWidget->setCurrentWidget(dbWidget);
+    }
+
+    dbWidget->switchToEntryEdit(entry);
 }
 
 void BrowserService::saveUrlToEntry(Entry* entry, const QString& siteUrl)

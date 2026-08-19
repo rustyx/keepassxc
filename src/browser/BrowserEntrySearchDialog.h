@@ -49,6 +49,7 @@ public:
 
 signals:
     void searchRequested(const QString& searchText);
+    void entryEditRequested(Entry* entry);
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -56,6 +57,7 @@ protected:
 private slots:
     void performSearch();
     void selectionChanged();
+    void showContextMenu(const QPoint& pos);
 
 private:
     void addEntryToList(const SearchDialogEntry& searchEntry, int row);

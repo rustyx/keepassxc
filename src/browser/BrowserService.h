@@ -195,6 +195,7 @@ private:
                                  const bool httpAuth);
     QJsonObject prepareEntry(const Entry* entry);
     void saveUrlToEntry(Entry* entry, const QString& siteUrl);
+    void editEntry(Entry* entry);
     void allowEntry(Entry* entry, const QString& siteHost, const QString& formUrl, const QString& realm);
     void denyEntry(Entry* entry, const QString& siteHost, const QString& formUrl, const QString& realm);
     QJsonArray getChildrenFromGroup(Group* group);

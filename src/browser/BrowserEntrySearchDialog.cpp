@@ -18,6 +18,7 @@
 #include "BrowserEntrySearchDialog.h"
 #include "ui_BrowserEntrySearchDialog.h"
 
+#include <QMenu>
 #include <QUrl>
 
 #include "core/Entry.h"
@@ -66,8 +67,10 @@ BrowserEntrySearchDialog::BrowserEntrySearchDialog(QWidget* parent)
             this,
             SLOT(selectionChanged()));
     connect(m_ui->itemsTable, SIGNAL(acceptSelections()), SLOT(accept()));
+    connect(m_ui->itemsTable, SIGNAL(customContextMenuRequested(QPoint)), SLOT(showContextMenu(QPoint)));
     connect(m_ui->itemsTable, SIGNAL(focusInWithoutSelections()), this, SLOT(selectionChanged()));
 
+    m_ui->itemsTable->setContextMenuPolicy(Qt::CustomContextMenu);
     m_ui->itemsTable->setColumnCount(4);
     m_ui->itemsTable->setHorizontalHeaderLabels({tr("Title"), tr("Username"), tr("URL"), tr("Warning")});
     // Interactive sections keep the columns resizable by the user. The widths are calculated in updateColumnWidths()
@@ -202,6 +205,22 @@ void BrowserEntrySearchDialog::selectionChanged()
     if (selectedRows.isEmpty()) {
         m_ui->selectButton->clearFocus();
     }
+}
+
+void BrowserEntrySearchDialog::showContextMenu(const QPoint& pos)
+{
+    const auto index = m_ui->itemsTable->indexAt(pos);
+    if (!index.isValid()) {
+        return;
+    }
+
+    auto* entry = m_entries.at(index.row()).entry;
+
+    QMenu menu(this);
+    const auto editAction = menu.addAction(icons()->icon("entry-edit"), tr("&Edit Entry…"));
+    connect(editAction, &QAction::triggered, this, [this, entry] { emit entryEditRequested(entry); });
+
+    menu.exec(m_ui->itemsTable->viewport()->mapToGlobal(pos));
 }
 
 void BrowserEntrySearchDialog::addEntryToList(const SearchDialogEntry& searchEntry, int row)
