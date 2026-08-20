@@ -103,6 +103,7 @@ set(gui_SOURCES
         gui/styles/base/phantomcolor.cpp
         gui/styles/base/BaseStyle.cpp
         gui/styles/dark/DarkStyle.cpp
+        gui/styles/darker/DarkerStyle.cpp
         gui/styles/light/LightStyle.cpp
         gui/AboutDialog.cpp
         gui/ActionCollection.cpp
