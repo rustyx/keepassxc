@@ -25,6 +25,7 @@
 #include "gui/MessageBox.h"
 #include "gui/osutils/OSUtils.h"
 #include "gui/styles/dark/DarkStyle.h"
+#include "gui/styles/darker/DarkerStyle.h"
 #include "gui/styles/light/LightStyle.h"
 
 #include <QFileInfo>
@@ -174,6 +175,10 @@ void Application::applyTheme()
 #endif
     }
     QPixmapCache::clear();
+    // Clear classic stylesheet so styles take full effect when switching live
+    if (appTheme != QLatin1String("classic")) {
+        setStyleSheet(QString());
+    }
     if (appTheme == "light") {
         auto* s = new LightStyle;
         setPalette(s->standardPalette());
@@ -181,6 +186,11 @@ void Application::applyTheme()
         m_darkTheme = false;
     } else if (appTheme == "dark") {
         auto* s = new DarkStyle;
+        setPalette(s->standardPalette());
+        setStyle(s);
+        m_darkTheme = true;
+    } else if (appTheme == "darker") {
+        auto* s = new DarkerStyle;
         setPalette(s->standardPalette());
         setStyle(s);
         m_darkTheme = true;

@@ -386,6 +386,7 @@
      <addaction name="actionThemeAuto"/>
      <addaction name="actionThemeLight"/>
      <addaction name="actionThemeDark"/>
+     <addaction name="actionThemeDarker"/>
      <addaction name="actionThemeClassic"/>
     </widget>
     <addaction name="menuTheme"/>
@@ -1175,6 +1176,17 @@
    </property>
    <property name="toolTip">
     <string>Set Theme: Dark</string>
+   </property>
+  </action>
+  <action name="actionThemeDarker">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Darker</string>
+   </property>
+   <property name="toolTip">
+    <string>Set Theme: Darker — low-luminance dark theme</string>
    </property>
   </action>
   <action name="actionThemeClassic">
